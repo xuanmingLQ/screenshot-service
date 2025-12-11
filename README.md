@@ -68,7 +68,7 @@ curl -X POST http://localhost:8080/screenshot \
   }' --output cropped.jpg
 ```
 
-# 6. 参数说明
+# 参数说明
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -88,7 +88,7 @@ curl -X POST http://localhost:8080/screenshot \
 | `timeout` | int | 30 | 超时时间(秒, 最大120) |
 | `clip` | object | - | 裁剪区域 {x,y,width,height} |
 
-# 7. 部署运行
+# 部署运行
 
 ```
 # 克隆或创建项目
