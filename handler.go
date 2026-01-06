@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -135,6 +136,7 @@ func processScreenshot(c *gin.Context, req *ScreenshotRequest) {
 
 	data, contentType, err := TakeScreenshot(req)
 	if err != nil {
+		log.Printf("Screenshot failed for URL: %s, Error: %v, Req: %+v", req.URL, err, req)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
