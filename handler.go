@@ -58,7 +58,7 @@ func (r *ScreenshotRequest) SetDefaults() {
 		r.DeviceScale = 1.0
 	}
 	if r.Timeout <= 0 {
-		r.Timeout = 30
+		r.Timeout = 60
 	}
 	if r.Timeout > 120 {
 		r.Timeout = 120
