@@ -68,6 +68,43 @@ func TakeScreenshot(req *ScreenshotRequest) ([]byte, string, error) {
 		}).Do(ctx)
 	}))
 
+    // Inject JS to replace the announcement.json URL
+	const script = `
+	(function() {
+		const targetSnippet = "assets.exmeaning.com/Ssekai/announcement.json";
+		const replacementUrl = "https://cdn.jsdelivr.net/gh/Exmeaning/Exmeaning-Image-hosting@main/Ssekai/announcement.json";
+
+		function replaceUrl(url) {
+			if (typeof url === 'string' && url.includes(targetSnippet)) {
+				return replacementUrl;
+			}
+			return url;
+		}
+
+		const originalFetch = window.fetch;
+		window.fetch = function(input, init) {
+			if (typeof input === 'string') {
+				input = replaceUrl(input);
+			} else if (input instanceof Request) {
+				if (input.url.includes(targetSnippet)) {
+					input = new Request(replaceUrl(input.url), input);
+				}
+			}
+			return originalFetch(input, init);
+		};
+
+		const originalOpen = XMLHttpRequest.prototype.open;
+		XMLHttpRequest.prototype.open = function(method, url, ...args) {
+			url = replaceUrl(url);
+			return originalOpen.call(this, method, url, ...args);
+		};
+	})();
+	`
+	tasks = append(tasks, chromedp.ActionFunc(func(ctx context.Context) error {
+		_, err := page.AddScriptToEvaluateOnNewDocument(script).Do(ctx)
+		return err
+	}))
+
 	tasks = append(tasks, chromedp.Navigate(req.URL))
 
 	if req.WaitFor != "" {
