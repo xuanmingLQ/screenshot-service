@@ -71,7 +71,7 @@ func TakeScreenshot(req *ScreenshotRequest) ([]byte, string, error) {
 	// Inject JS to replace the announcement.json URL
 	const script = `
 	(function() {
-		const replacementPrefix = "https://cdn.jsdelivr.net/gh/Exmeaning/Exmeaning-Image-hosting@main";
+		const replacementPrefix = "http://exmeaning-image-hosting.zeabur.internal:8080";
 
 		function replaceUrl(url) {
 			if (typeof url === 'string') {
