@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
@@ -68,45 +69,80 @@ func TakeScreenshot(req *ScreenshotRequest) ([]byte, string, error) {
 		}).Do(ctx)
 	}))
 
-	// Inject JS to replace the announcement.json URL
-	const script = `
-	(function() {
-		const replacementPrefix = "http://exmeaning-image-hosting.zeabur.internal:8080";
+	// Enable Fetch domain to intercept requests
+	tasks = append(tasks, fetch.Enable())
 
-		function replaceUrl(url) {
-			if (typeof url === 'string') {
-				// Replace assets.exmeaning.com with the CDN URL, preserving the path.
-				// Handles http, https, or no protocol.
-				return url.replace(/^(https?:\/\/)?assets\.exmeaning\.com/, replacementPrefix);
-			}
-			return url;
-		}
+	// Listen for request handling
+	chromedp.ListenTarget(ctx, func(ev interface{}) {
+		if ev, ok := ev.(*fetch.EventRequestPaused); ok {
+			go func() {
+				reqURL := ev.Request.URL
+				// Check if the URL starts with the target domain (http or https or no protocol)
+				// We need a simple string check or regex. Since we want to replace the host but keep the path.
+				// Regex to match assets.exmeaning.com and optional protocol
+				// Using simple string replacement for simplicity if possible, but regex is safer for domain matching.
 
-		const originalFetch = window.fetch;
-		window.fetch = function(input, init) {
-			if (typeof input === 'string') {
-				input = replaceUrl(input);
-			} else if (input instanceof Request) {
-				// Check if the URL needs replacement
-				const newUrl = replaceUrl(input.url);
-				if (newUrl !== input.url) {
-					input = new Request(newUrl, input);
+				// Logic:
+				// If URL matches `assets.exmeaning.com`, replace the domain with `exmeaning-image-hosting.zeabur.internal:8080`
+				// and keep the rest of the path.
+
+				// Let's use string manipulation for efficiency if it's consistent.
+				// Or just regex as before.
+
+				// Note: Go's regexp package is not available here unless imported, but we are inside a function.
+				// We can just use strings.HasPrefix or Contains.
+				// However, to do it robustly like the valid regexp replacement:
+
+				// We will iterate to check if it needs replacement.
+
+				// Simple approach:
+				// If strings.Contains(reqURL, "assets.exmeaning.com") {
+				//    newURL := strings.Replace(reqURL, "https://assets.exmeaning.com", "http://exmeaning-image-hosting.zeabur.internal:8080", 1)
+				//    newURL = strings.Replace(newURL, "http://assets.exmeaning.com", "http://exmeaning-image-hosting.zeabur.internal:8080", 1)
+				//    // Handle case without protocol if it happens (unlikely in standardized RequestURL)
+				//    cc.Executor.Execute(context.Background(), fetch.ContinueRequest(ev.RequestId).WithUrl(newURL))
+				// } else {
+				//    cc.Executor.Execute(context.Background(), fetch.ContinueRequest(ev.RequestId))
+				// }
+
+				// Wait, `chromedp.ListenTarget` callback is executed synchronously.
+				// We shouldn't use `go func()` unless strictly necessary, but `Executor.Execute` might block?
+				// Actually `chromedp` documentation says listeners block the event loop? No, they are callbacks.
+				// But `fetch.ContinueRequest` needs to be sent.
+
+				// Better approach inside `chromdp` is often just to invoke the command.
+
+				targetDomain := "assets.exmeaning.com"
+				replacementBase := "http://exmeaning-image-hosting.zeabur.internal:8080"
+
+				needsReplacement := false
+				newURL := reqURL
+
+				// Handle specific cases
+				if len(reqURL) > 8 && reqURL[0:8] == "https://" && len(reqURL) >= 8+len(targetDomain) && reqURL[8:8+len(targetDomain)] == targetDomain {
+					newURL = replacementBase + reqURL[8+len(targetDomain):]
+					needsReplacement = true
+				} else if len(reqURL) > 7 && reqURL[0:7] == "http://" && len(reqURL) >= 7+len(targetDomain) && reqURL[7:7+len(targetDomain)] == targetDomain {
+					newURL = replacementBase + reqURL[7+len(targetDomain):]
+					needsReplacement = true
 				}
-			}
-			return originalFetch(input, init);
-		};
 
-		const originalOpen = XMLHttpRequest.prototype.open;
-		XMLHttpRequest.prototype.open = function(method, url, ...args) {
-			url = replaceUrl(url);
-			return originalOpen.call(this, method, url, ...args);
-		};
-	})();
-	`
-	tasks = append(tasks, chromedp.ActionFunc(func(ctx context.Context) error {
-		_, err := page.AddScriptToEvaluateOnNewDocument(script).Do(ctx)
-		return err
-	}))
+				// Execute ContinueRequest
+				if needsReplacement {
+					// fmt.Printf("Replacing URL: %s -> %s\n", reqURL, newURL)
+					err := fetch.ContinueRequest(ev.RequestID).WithURL(newURL).Do(ctx)
+					if err != nil {
+						fmt.Printf("Failed to continue request with modified URL: %v\n", err)
+					}
+				} else {
+					err := fetch.ContinueRequest(ev.RequestID).Do(ctx)
+					if err != nil {
+						fmt.Printf("Failed to continue request: %v\n", err)
+					}
+				}
+			}()
+		}
+	})
 
 	tasks = append(tasks, chromedp.Navigate(req.URL))
 
