@@ -68,15 +68,16 @@ func TakeScreenshot(req *ScreenshotRequest) ([]byte, string, error) {
 		}).Do(ctx)
 	}))
 
-    // Inject JS to replace the announcement.json URL
+	// Inject JS to replace the announcement.json URL
 	const script = `
 	(function() {
-		const targetSnippet = "assets.exmeaning.com/Ssekai/announcement.json";
-		const replacementUrl = "https://cdn.jsdelivr.net/gh/Exmeaning/Exmeaning-Image-hosting@main/Ssekai/announcement.json";
+		const replacementPrefix = "https://cdn.jsdelivr.net/gh/Exmeaning/Exmeaning-Image-hosting@main";
 
 		function replaceUrl(url) {
-			if (typeof url === 'string' && url.includes(targetSnippet)) {
-				return replacementUrl;
+			if (typeof url === 'string') {
+				// Replace assets.exmeaning.com with the CDN URL, preserving the path.
+				// Handles http, https, or no protocol.
+				return url.replace(/^(https?:\/\/)?assets\.exmeaning\.com/, replacementPrefix);
 			}
 			return url;
 		}
@@ -86,8 +87,10 @@ func TakeScreenshot(req *ScreenshotRequest) ([]byte, string, error) {
 			if (typeof input === 'string') {
 				input = replaceUrl(input);
 			} else if (input instanceof Request) {
-				if (input.url.includes(targetSnippet)) {
-					input = new Request(replaceUrl(input.url), input);
+				// Check if the URL needs replacement
+				const newUrl = replaceUrl(input.url);
+				if (newUrl !== input.url) {
+					input = new Request(newUrl, input);
 				}
 			}
 			return originalFetch(input, init);
