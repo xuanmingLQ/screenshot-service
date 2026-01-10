@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/network"
@@ -75,67 +76,37 @@ func TakeScreenshot(req *ScreenshotRequest) ([]byte, string, error) {
 	// Listen for request handling
 	chromedp.ListenTarget(ctx, func(ev interface{}) {
 		if ev, ok := ev.(*fetch.EventRequestPaused); ok {
+			reqURL := ev.Request.URL
+			targetDomain := "assets.exmeaning.com"
+			replacementBase := "http://exmeaning-image-hosting.zeabur.internal:8080"
+
+			needsReplacement := false
+			newURL := reqURL
+
+			// Handle specific cases
+			if len(reqURL) > 8 && reqURL[0:8] == "https://" && len(reqURL) >= 8+len(targetDomain) && reqURL[8:8+len(targetDomain)] == targetDomain {
+				newURL = replacementBase + reqURL[8+len(targetDomain):]
+				needsReplacement = true
+			} else if len(reqURL) > 7 && reqURL[0:7] == "http://" && len(reqURL) >= 7+len(targetDomain) && reqURL[7:7+len(targetDomain)] == targetDomain {
+				newURL = replacementBase + reqURL[7+len(targetDomain):]
+				needsReplacement = true
+			}
+
+			// Execute ContinueRequest using the executor
+			c := chromedp.FromContext(ctx)
+			if c == nil || c.Target == nil {
+				return
+			}
+			executor := c.Target
+
 			go func() {
-				reqURL := ev.Request.URL
-				// Check if the URL starts with the target domain (http or https or no protocol)
-				// We need a simple string check or regex. Since we want to replace the host but keep the path.
-				// Regex to match assets.exmeaning.com and optional protocol
-				// Using simple string replacement for simplicity if possible, but regex is safer for domain matching.
-
-				// Logic:
-				// If URL matches `assets.exmeaning.com`, replace the domain with `exmeaning-image-hosting.zeabur.internal:8080`
-				// and keep the rest of the path.
-
-				// Let's use string manipulation for efficiency if it's consistent.
-				// Or just regex as before.
-
-				// Note: Go's regexp package is not available here unless imported, but we are inside a function.
-				// We can just use strings.HasPrefix or Contains.
-				// However, to do it robustly like the valid regexp replacement:
-
-				// We will iterate to check if it needs replacement.
-
-				// Simple approach:
-				// If strings.Contains(reqURL, "assets.exmeaning.com") {
-				//    newURL := strings.Replace(reqURL, "https://assets.exmeaning.com", "http://exmeaning-image-hosting.zeabur.internal:8080", 1)
-				//    newURL = strings.Replace(newURL, "http://assets.exmeaning.com", "http://exmeaning-image-hosting.zeabur.internal:8080", 1)
-				//    // Handle case without protocol if it happens (unlikely in standardized RequestURL)
-				//    cc.Executor.Execute(context.Background(), fetch.ContinueRequest(ev.RequestId).WithUrl(newURL))
-				// } else {
-				//    cc.Executor.Execute(context.Background(), fetch.ContinueRequest(ev.RequestId))
-				// }
-
-				// Wait, `chromedp.ListenTarget` callback is executed synchronously.
-				// We shouldn't use `go func()` unless strictly necessary, but `Executor.Execute` might block?
-				// Actually `chromedp` documentation says listeners block the event loop? No, they are callbacks.
-				// But `fetch.ContinueRequest` needs to be sent.
-
-				// Better approach inside `chromdp` is often just to invoke the command.
-
-				targetDomain := "assets.exmeaning.com"
-				replacementBase := "http://exmeaning-image-hosting.zeabur.internal:8080"
-
-				needsReplacement := false
-				newURL := reqURL
-
-				// Handle specific cases
-				if len(reqURL) > 8 && reqURL[0:8] == "https://" && len(reqURL) >= 8+len(targetDomain) && reqURL[8:8+len(targetDomain)] == targetDomain {
-					newURL = replacementBase + reqURL[8+len(targetDomain):]
-					needsReplacement = true
-				} else if len(reqURL) > 7 && reqURL[0:7] == "http://" && len(reqURL) >= 7+len(targetDomain) && reqURL[7:7+len(targetDomain)] == targetDomain {
-					newURL = replacementBase + reqURL[7+len(targetDomain):]
-					needsReplacement = true
-				}
-
-				// Execute ContinueRequest
 				if needsReplacement {
-					// fmt.Printf("Replacing URL: %s -> %s\n", reqURL, newURL)
-					err := fetch.ContinueRequest(ev.RequestID).WithURL(newURL).Do(ctx)
+					err := fetch.ContinueRequest(ev.RequestID).WithURL(newURL).Do(cdp.WithExecutor(context.Background(), executor))
 					if err != nil {
 						fmt.Printf("Failed to continue request with modified URL: %v\n", err)
 					}
 				} else {
-					err := fetch.ContinueRequest(ev.RequestID).Do(ctx)
+					err := fetch.ContinueRequest(ev.RequestID).Do(cdp.WithExecutor(context.Background(), executor))
 					if err != nil {
 						fmt.Printf("Failed to continue request: %v\n", err)
 					}
