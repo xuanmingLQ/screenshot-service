@@ -80,16 +80,30 @@ func TakeScreenshot(req *ScreenshotRequest) ([]byte, string, error) {
 			targetDomain := "assets.exmeaning.com"
 			replacementBase := "http://exmeaning-image-hosting.zeabur.internal:8080"
 
+			snowyTargetDomain := "snowyassets.exmeaning.com"
+			snowyReplacementBase := "http://snowy-assets.zeabur.internal:8080"
+
 			needsReplacement := false
 			newURL := reqURL
 
-			// Handle specific cases
+			// Handle specific cases for assets.exmeaning.com
 			if len(reqURL) > 8 && reqURL[0:8] == "https://" && len(reqURL) >= 8+len(targetDomain) && reqURL[8:8+len(targetDomain)] == targetDomain {
 				newURL = replacementBase + reqURL[8+len(targetDomain):]
 				needsReplacement = true
 			} else if len(reqURL) > 7 && reqURL[0:7] == "http://" && len(reqURL) >= 7+len(targetDomain) && reqURL[7:7+len(targetDomain)] == targetDomain {
 				newURL = replacementBase + reqURL[7+len(targetDomain):]
 				needsReplacement = true
+			}
+
+			// Handle specific cases for snowyassets.exmeaning.com
+			if !needsReplacement {
+				if len(reqURL) > 8 && reqURL[0:8] == "https://" && len(reqURL) >= 8+len(snowyTargetDomain) && reqURL[8:8+len(snowyTargetDomain)] == snowyTargetDomain {
+					newURL = snowyReplacementBase + reqURL[8+len(snowyTargetDomain):]
+					needsReplacement = true
+				} else if len(reqURL) > 7 && reqURL[0:7] == "http://" && len(reqURL) >= 7+len(snowyTargetDomain) && reqURL[7:7+len(snowyTargetDomain)] == snowyTargetDomain {
+					newURL = snowyReplacementBase + reqURL[7+len(snowyTargetDomain):]
+					needsReplacement = true
+				}
 			}
 
 			// Execute ContinueRequest using the executor
