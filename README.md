@@ -1,3 +1,6 @@
+# 源自 https://github.com/Exmeaning/screenshot-service
+[Exmeaning](https://github.com/Exmeaning)
+
 # screenshot-service
 一个GO+dockerfile的网页截图微服务例程
 # GET 请求示例
